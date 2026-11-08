@@ -1,0 +1,22 @@
+services:
+  ailive2d:
+    build: .
+    container_name: ailive2d
+    ports:
+      - "${AILIVE2D_PORT:-8787}:8787"
+    environment:
+      AILIVE2D_HOST: "0.0.0.0"
+      AILIVE2D_PORT: "8787"
+      # Session cookie signing secret (change in production)
+      AILIVE2D_SECRET: "${AILIVE2D_SECRET:-please-change-this-secret}"
+      # Point at your Ollama host (LAN IP or host.docker.internal)
+      AILIVE2D_LLM_BASE_URL: "${AILIVE2D_LLM_BASE_URL:-http://192.168.50.226:11434}"
+      # Set to 0 to disable login (not recommended on public servers)
+      AILIVE2D_AUTH: "${AILIVE2D_AUTH:-1}"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./data:/app/data
+    restart: unless-stopped
+    # If Ollama runs on the Docker host machine:
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"

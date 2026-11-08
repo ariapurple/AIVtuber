@@ -1,0 +1,2 @@
+Set-Location $PSScriptRoot
+& .\.venv\Scripts\python.exe run.py

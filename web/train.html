@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>訓練 Chatroom</title>
+  <style>
+    :root { color-scheme: dark; --bg:#101014; --panel:#1a1a20; --line:#2c2c34; --text:#ececf1; --muted:#9a9aa8; --accent:#d4a27f; --ok:#7dba8a; --bad:#d98989; }
+    * { box-sizing: border-box; }
+    body { margin:0; font:14px/1.45 "Segoe UI","Microsoft JhengHei",sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; }
+    header { padding:12px 16px; border-bottom:1px solid var(--line); display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    header h1 { font-size:16px; margin:0; flex:1; }
+    .pill { font-size:12px; padding:2px 8px; border-radius:999px; background:#2a2a30; }
+    button { background:var(--accent); color:#1a120c; border:0; border-radius:8px; padding:8px 12px; font-weight:650; cursor:pointer; }
+    button.secondary { background:#2a2a30; color:var(--text); }
+    button.danger { background:#a35353; color:#fff; }
+    #msgs { flex:1; overflow:auto; padding:16px; display:flex; flex-direction:column; gap:10px; }
+    .bubble { max-width:min(720px,92%); padding:10px 12px; border-radius:12px; background:var(--panel); border:1px solid var(--line); white-space:pre-wrap; }
+    .bubble.me { align-self:flex-end; background:#2a221c; }
+    .bubble.bot { align-self:flex-start; }
+    .meta { color:var(--muted); font-size:11px; margin-bottom:4px; }
+    footer { border-top:1px solid var(--line); padding:12px 16px; display:flex; gap:8px; }
+    textarea { flex:1; min-height:54px; resize:vertical; padding:10px; border-radius:8px; border:1px solid var(--line); background:#101012; color:var(--text); font:inherit; }
+    .note { color:var(--muted); font-size:12px; padding:0 16px 8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>訓練 Chatroom（純文字・無 TTS）</h1>
+    <span class="pill" id="who">…</span>
+    <span class="pill" id="stage">idle</span>
+    <button id="cancel" class="danger">踢走卡住</button>
+    <a id="adminLink" href="/" style="display:none"><button class="secondary" type="button">管理台</button></a>
+    <button id="logout" class="secondary">登出</button>
+  </header>
+  <div class="note">用嚟內部練人設／安全／記憶。唔會播聲，亦唔會撳 VTS 表情。</div>
+  <div id="msgs"></div>
+  <footer>
+    <textarea id="text" placeholder="打字同神崎紫傾…"></textarea>
+    <button id="send">送出</button>
+  </footer>
+  <script>
+    const msgs = document.getElementById("msgs");
+    function addBubble(who, text, mine) {
+      const div = document.createElement("div");
+      div.className = "bubble " + (mine ? "me" : "bot");
+      div.innerHTML = `<div class="meta"></div>`;
+      div.querySelector(".meta").textContent = who;
+      div.append(document.createTextNode(text));
+      msgs.appendChild(div);
+      msgs.scrollTop = msgs.scrollHeight;
+    }
+    async function api(path, options) {
+      const res = await fetch(path, options);
+      if (res.status === 401) { location.href = "/login"; return null; }
+      return res.json();
+    }
+    async function boot() {
+      const me = await api("/api/me");
+      if (!me) return;
+      document.getElementById("who").textContent = (me.user.username || "") + " · " + (me.user.role || "");
+      if (me.user.role === "admin") document.getElementById("adminLink").style.display = "";
+      const hist = await api("/api/train/history");
+      if (hist && hist.messages) {
+        hist.messages.forEach((m) => {
+          addBubble(m.author || "user", m.user_text || "", true);
+          addBubble("神崎 紫" + (m.emotion ? ` (${m.emotion})` : ""), m.reply || "", false);
+        });
+      }
+    }
+    document.getElementById("send").onclick = async () => {
+      const text = document.getElementById("text").value.trim();
+      if (!text) return;
+      document.getElementById("text").value = "";
+      addBubble("我", text, true);
+      document.getElementById("stage").textContent = "thinking…";
+      const data = await api("/api/train/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      document.getElementById("stage").textContent = "idle";
+      if (!data) return;
+      if (data.ok) addBubble("神崎 紫 (" + (data.emotion||"") + ")", data.reply || "", false);
+      else addBubble("系統", data.error || JSON.stringify(data), false);
+    };
+    document.getElementById("text").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); document.getElementById("send").click(); }
+    });
+    document.getElementById("cancel").onclick = async () => {
+      await api("/api/cancel", { method: "POST" });
+      document.getElementById("stage").textContent = "cancelled";
+    };
+    document.getElementById("logout").onclick = async () => {
+      await api("/api/logout", { method: "POST" });
+      location.href = "/login";
+    };
+    boot();
+  </script>
+</body>
+</html>

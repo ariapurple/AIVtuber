@@ -1,0 +1,15 @@
+﻿.venv/
+__pycache__/
+*.pyc
+.vts_token.txt
+.tmp-*.ps1
+.tmp-*.cmd
+.DS_Store
+data/
+.env
+config.local.yaml
+*_err.log
+*_out.log
+_*.py
+.idea/
+.vscode/

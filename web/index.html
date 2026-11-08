@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AILive2D 控制台</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101014; --panel: #1a1a20; --line: #2c2c34;
+      --text: #ececf1; --muted: #9a9aa8; --accent: #d4a27f;
+      --ok: #7dba8a; --bad: #d98989; --warn: #d4c07f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 14px/1.45 "Segoe UI", "Microsoft JhengHei", sans-serif;
+      background: var(--bg); color: var(--text);
+    }
+    header {
+      position: sticky; top: 0; z-index: 10;
+      background: rgba(16,16,20,.92); backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--line);
+      padding: 12px 20px 0;
+    }
+    header h1 { font-size: 18px; margin: 0 0 4px; }
+    header .sub { color: var(--muted); font-size: 12px; margin-bottom: 10px; }
+    .tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+    .tabs button {
+      background: transparent; color: var(--muted); border: 0;
+      border-bottom: 2px solid transparent; border-radius: 0;
+      padding: 10px 12px; font-weight: 600; cursor: pointer;
+    }
+    .tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+    main { max-width: 1100px; margin: 0 auto; padding: 18px 20px 48px; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    h2 { font-size: 15px; margin: 0 0 10px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .card {
+      background: var(--panel); border: 1px solid var(--line);
+      border-radius: 10px; padding: 12px 14px;
+    }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; background: var(--bad); }
+    .dot.ok { background: var(--ok); }
+    .dot.warn { background: var(--warn); }
+    button, select, textarea, input {
+      font: inherit; color: var(--text); background: #101012;
+      border: 1px solid var(--line); border-radius: 8px;
+    }
+    button {
+      background: var(--accent); color: #1a120c; border: 0;
+      padding: 8px 12px; font-weight: 650; cursor: pointer;
+    }
+    button.secondary { background: #2a2a30; color: var(--text); }
+    button.danger { background: #a35353; color: #fff; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    textarea, input, select { width: 100%; padding: 10px; }
+    textarea { min-height: 88px; resize: vertical; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .note, label, p { color: var(--muted); }
+    .log, pre.api {
+      white-space: pre-wrap; background: #101012; border-radius: 8px;
+      padding: 12px; min-height: 64px; color: var(--text); font-size: 13px;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    td, th { text-align: left; padding: 6px 0; border-bottom: 1px solid var(--line); }
+    .pill {
+      display: inline-block; padding: 2px 8px; border-radius: 999px;
+      background: #2a2a30; font-size: 12px; margin-right: 6px;
+    }
+    .pill.busy { background: #5a4020; color: var(--warn); }
+    .pill.idle { background: #243528; color: var(--ok); }
+    .stage-bar {
+      display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 14px;
+    }
+    .stage-bar span {
+      padding: 6px 10px; border-radius: 8px; background: #18181e;
+      border: 1px solid var(--line); color: var(--muted); font-size: 12px;
+    }
+    .stage-bar span.on { border-color: var(--accent); color: var(--text); background: #2a221c; }
+    .stage-bar span.done { color: var(--ok); }
+    .kv { font-size: 12px; color: var(--muted); }
+    .kv b { color: var(--text); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>AILive2D 控制台</h1>
+    <div class="sub">一次過睇晒狀態、聊天、記憶、操作同 API。卡住可直接踢走，唔使重開 server。</div>
+    <div class="tabs" id="tabs">
+      <button data-tab="overview" class="active">總覽</button>
+      <button data-tab="chat">聊天</button>
+      <button data-tab="memory">記憶</button>
+      <button data-tab="ops">操作</button>
+      <button data-tab="voice">聲線／熱鍵</button>
+      <button data-tab="api">API</button>
+      <a href="/train" style="margin-left:auto;align-self:center;color:var(--accent);text-decoration:none;font-weight:650;padding:8px 10px">訓練 Chatroom</a>
+      <span id="whoAmI" style="align-self:center;color:var(--muted);font-size:12px;padding:0 6px"></span>
+      <button type="button" id="logoutBtn" class="secondary" style="margin:6px 0;padding:6px 10px">登出</button>
+    </div>
+  </header>
+  <main>
+    <section id="tab-overview" class="panel active">
+      <div class="card" style="margin-bottom:12px">
+        <h2>Pipeline 現況</h2>
+        <div>
+          <span id="busyPill" class="pill idle">idle</span>
+          <span class="kv">階段 <b id="stageName">idle</b> · <span id="stageDetail">—</span></span>
+        </div>
+        <div class="stage-bar" id="stageBar"></div>
+        <div class="row">
+          <button id="btnCancel" class="danger">踢走卡住流程</button>
+          <button id="btnRefresh" class="secondary">立即刷新</button>
+        </div>
+        <div id="cancelLog" class="log" style="margin-top:10px">未取消過。</div>
+      </div>
+      <div class="grid">
+        <div class="card"><span id="llmDot" class="dot"></span><strong>Ollama / LLM</strong><div id="llmStatus" class="note">…</div></div>
+        <div class="card"><span id="vtsDot" class="dot"></span><strong>VTube Studio</strong><div id="vtsStatus" class="note">…</div></div>
+        <div class="card"><span id="ttsDot" class="dot"></span><strong>TTS</strong><div id="ttsStatus" class="note">…</div></div>
+        <div class="card"><span id="memDot" class="dot"></span><strong>Memory</strong><div id="memStatus" class="note">…</div></div>
+      </div>
+      <div class="card">
+        <h2>上次結果</h2>
+        <div id="lastLog" class="log">尚無。</div>
+      </div>
+    </section>
+
+    <section id="tab-chat" class="panel">
+      <div class="card">
+        <h2>本地同角色傾偈</h2>
+        <p class="note">唔使接 YouTube。打字送出 → 記憶召回 → Ollama → 表情 → TTS。</p>
+        <label for="author">觀眾名稱</label>
+        <input id="author" value="訓練員" />
+        <label for="chat" style="display:block;margin-top:8px">留言</label>
+        <textarea id="chat">你叫咩名？鍾意食咩？</textarea>
+        <div class="row">
+          <button id="sendChat">送出（AI 回覆＋唸）</button>
+          <button id="speakOnly" class="secondary">只唸文字</button>
+          <button id="btnCancel2" class="danger">踢走</button>
+        </div>
+        <div id="chatLog" class="log" style="margin-top:10px">尚未測試。</div>
+      </div>
+    </section>
+
+    <section id="tab-memory" class="panel">
+      <div class="card" style="margin-bottom:12px">
+        <h2>記憶狀態</h2>
+        <div id="memDetail" class="note">…</div>
+      </div>
+      <div class="card" style="margin-bottom:12px">
+        <h2>加入事實</h2>
+        <textarea id="factText" placeholder="例如：神崎紫最鍾意食章魚燒"></textarea>
+        <div class="row"><button id="addFact">寫入 fact</button></div>
+      </div>
+      <div class="card">
+        <h2>搜尋召回</h2>
+        <input id="memQuery" placeholder="輸入查詢…" />
+        <div class="row"><button id="searchMem">搜尋</button></div>
+        <div id="memHits" class="log" style="margin-top:10px">尚未搜尋。</div>
+      </div>
+    </section>
+
+    <section id="tab-ops" class="panel">
+      <div class="card" style="margin-bottom:12px">
+        <h2>救援操作</h2>
+        <p class="note">對應 Vedal 式「唔殺成個 process」：只取消而家條 pipeline、停 TTS、清 busy。</p>
+        <div class="row">
+          <button id="btnCancel3" class="danger">踢走卡住流程</button>
+          <button id="reconnect" class="secondary">重連 VTS</button>
+          <button id="toggleTrack" class="secondary">接管／交還鏡頭</button>
+          <button id="runDemo" class="secondary">演示表情動作</button>
+        </div>
+        <div id="opsLog" class="log" style="margin-top:10px">待命。</div>
+      </div>
+      <div class="card">
+        <h2>點樣判斷卡邊步</h2>
+        <p class="note">總覽 tab 會顯示 stage：<code>recall</code>→<code>llm</code>→<code>vts</code>→<code>tts</code>→<code>store</code>。停喺邊個高亮太耐，就係邊步；撳踢走即可。</p>
+      </div>
+    </section>
+
+    <section id="tab-voice" class="panel">
+      <div class="card" style="margin-bottom:12px">
+        <h2>聲線</h2>
+        <label for="voice">聲線</label>
+        <select id="voice"></select>
+        <label for="rate" style="display:block;margin-top:8px">語速</label>
+        <select id="rate">
+          <option value="-15%">更慢</option>
+          <option value="-8%">慢（懶洋洋）</option>
+          <option value="+0%">正常</option>
+          <option value="+8%">稍快</option>
+          <option value="+15%">快</option>
+        </select>
+        <div class="row"><button id="saveVoice">儲存並試聽</button></div>
+      </div>
+      <div class="card">
+        <h2>熱鍵對照</h2>
+        <table>
+          <thead><tr><th>情緒／動作</th><th>VTS 熱鍵</th></tr></thead>
+          <tbody id="mapBody"></tbody>
+        </table>
+        <div class="row">
+          <button id="saveMap">儲存對照</button>
+          <button id="fireHotkey" class="secondary">測試第一個已選熱鍵</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-api" class="panel">
+      <div class="card">
+        <h2>常用 API</h2>
+        <pre class="api">GET  /api/status          總狀態（含 pipeline.stage）
+POST /api/chat            {"text","author"} 完整對話
+POST /api/cancel          踢走卡住流程（不停 server）
+POST /api/speak           {"text"} 只 TTS
+POST /api/vts/connect     重連 VTS
+POST /api/vts/tracking    {"enabled": true|false}
+POST /api/demo            表情動作演示
+POST /api/tts             {"voice","rate","preview"}
+POST /api/hotkey          {"name"}
+POST /api/hotkeys         {"hotkeys":{...}}
+GET  /api/memory/status
+POST /api/memory/fact     {"text","author"}
+POST /api/memory/search   {"query","n"}</pre>
+        <p class="note">本機開啟：<a href="http://127.0.0.1:8787/" style="color:var(--accent)">http://127.0.0.1:8787/</a></p>
+      </div>
+    </section>
+  </main>
+  <script>
+    const STAGES = ["recall", "llm", "vts", "tts", "store", "demo"];
+    const keys = ["happy", "sad", "angry", "shy", "surprised", "wave", "idle"];
+    const labels = { happy:"開心", sad:"難過", angry:"生氣", shy:"害羞", surprised:"驚訝", wave:"揮手", idle:"閒置" };
+    let hotkeyNames = [];
+    let hotkeyMap = {};
+
+    async function api(path, options) {
+      const res = await fetch(path, options);
+      if (res.status === 401) { location.href = "/login"; return { ok:false, error:"未登入" }; }
+      const text = await res.text();
+      try { return JSON.parse(text); } catch { return { ok:false, error:text || res.status }; }
+    }
+
+    function setDot(id, ok, warn) {
+      const el = document.getElementById(id);
+      el.className = "dot" + (ok ? " ok" : (warn ? " warn" : ""));
+    }
+
+    function showTab(name) {
+      document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
+      document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("active", p.id === "tab-" + name));
+    }
+    document.getElementById("tabs").onclick = (e) => {
+      const btn = e.target.closest("button[data-tab]");
+      if (btn) showTab(btn.dataset.tab);
+    };
+
+    function renderStageBar(stage, busy) {
+      const bar = document.getElementById("stageBar");
+      bar.innerHTML = STAGES.map((s) => {
+        let cls = "";
+        if (stage === s) cls = "on";
+        else if (busy && STAGES.indexOf(s) < STAGES.indexOf(stage)) cls = "done";
+        return `<span class="${cls}">${s}</span>`;
+      }).join("");
+    }
+
+    function optionList(selected) {
+      return ['<option value="">（不觸發）</option>']
+        .concat(hotkeyNames.map((name) => `<option value="${name}"${name===selected?" selected":""}>${name}</option>`))
+        .join("");
+    }
+    function renderMap() {
+      document.getElementById("mapBody").innerHTML = keys.map((key) =>
+        `<tr><td>${labels[key]}</td><td><select data-emotion="${key}">${optionList(hotkeyMap[key]||"")}</select></td></tr>`
+      ).join("");
+    }
+
+    async function refresh() {
+      const data = await api("/api/status");
+      const llmOk = !!(data.llm && data.llm.ok);
+      const vtsOk = !!(data.vts && data.vts.ok);
+      const mem = data.memory || {};
+      const pipe = data.pipeline || {};
+      const busy = !!(pipe.busy || data.busy);
+      const stage = pipe.stage || (busy ? "?" : "idle");
+
+      setDot("llmDot", llmOk);
+      setDot("vtsDot", vtsOk);
+      setDot("ttsDot", true);
+      setDot("memDot", !!mem.ok);
+
+      document.getElementById("llmStatus").textContent = llmOk
+        ? ((data.character && data.character.name) ? data.character.name + " · " : "") + ((data.llm.models || []).join(", ") || "ok")
+        : ((data.llm && data.llm.error) || "未連線");
+      document.getElementById("vtsStatus").textContent = vtsOk
+        ? ((data.vts.model && data.vts.model.name) || "已連線") + (data.vts.tracking_takeover ? " · 已接管" : " · 跟臉")
+        : ((data.vts && data.vts.error) || "未連線");
+      document.getElementById("ttsStatus").textContent = data.tts
+        ? ((data.tts.voices || []).find((i) => i.id === data.tts.voice)?.label || data.tts.voice) + " · " + (data.tts.rate || "")
+        : "";
+      document.getElementById("memStatus").textContent = mem.ok
+        ? `${mem.count || 0} 條 · ${mem.embed_model || ""} · top_k=${mem.top_k}`
+        : (mem.error || "未啟用");
+      document.getElementById("memDetail").textContent = mem.ok
+        ? `路徑 ${mem.persist_dir || ""}｜collection ${mem.collection || ""}｜共 ${mem.count || 0} 條`
+        : JSON.stringify(mem);
+
+      const pill = document.getElementById("busyPill");
+      pill.textContent = busy ? "busy · " + stage : "idle";
+      pill.className = "pill " + (busy ? "busy" : "idle");
+      document.getElementById("stageName").textContent = stage;
+      document.getElementById("stageDetail").textContent = pipe.detail || "—";
+      renderStageBar(stage, busy);
+
+      document.getElementById("lastLog").textContent = data.last && Object.keys(data.last).length
+        ? JSON.stringify(data.last, null, 2)
+        : "尚無。";
+
+      const voiceSel = document.getElementById("voice");
+      const rateSel = document.getElementById("rate");
+      if (voiceSel && !voiceSel.dataset.ready && data.tts && data.tts.voices) {
+        voiceSel.innerHTML = data.tts.voices.map((i) => `<option value="${i.id}">${i.label}</option>`).join("");
+        voiceSel.dataset.ready = "1";
+      }
+      if (voiceSel && data.tts && data.tts.voice) voiceSel.value = data.tts.voice;
+      if (rateSel && data.tts && data.tts.rate) {
+        if (![...rateSel.options].some((o) => o.value === data.tts.rate)) {
+          const opt = document.createElement("option");
+          opt.value = data.tts.rate; opt.textContent = data.tts.rate;
+          rateSel.appendChild(opt);
+        }
+        rateSel.value = data.tts.rate;
+      }
+      hotkeyNames = ((data.vts && data.vts.hotkeys) || []).map((i) => i.name).filter(Boolean);
+      hotkeyMap = data.hotkey_map || {};
+      renderMap();
+      return data;
+    }
+
+    async function doCancel(logId) {
+      const el = document.getElementById(logId);
+      el.textContent = "正在踢走…";
+      const data = await api("/api/cancel", { method: "POST" });
+      el.textContent = data.ok
+        ? `已踢走。先前階段：${data.previous_stage || "?"} → ${data.stage_detail || "idle"}`
+        : (data.error || JSON.stringify(data));
+      await refresh();
+    }
+
+    document.getElementById("btnCancel").onclick = () => doCancel("cancelLog");
+    document.getElementById("btnCancel2").onclick = () => doCancel("chatLog");
+    document.getElementById("btnCancel3").onclick = () => doCancel("opsLog");
+    document.getElementById("btnRefresh").onclick = refresh;
+
+    document.getElementById("sendChat").onclick = async () => {
+      const log = document.getElementById("chatLog");
+      log.textContent = "送出中… 可去總覽睇 stage。";
+      showTab("overview");
+      const data = await api("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: document.getElementById("chat").value,
+          author: document.getElementById("author").value,
+        }),
+      });
+      showTab("chat");
+      if (data.cancelled) log.textContent = "已取消。";
+      else if (data.ok) {
+        const mems = (data.memories_used || []).map((m) => `- [${m.kind}] ${m.text}`).join("\n");
+        log.textContent = `觀眾 ${data.author}: ${data.user_text}\n角色(${data.emotion}/${data.motion}): ${data.reply}`
+          + (mems ? `\n\n用過記憶：\n${mems}` : "");
+      } else log.textContent = data.error || JSON.stringify(data);
+      await refresh();
+    };
+
+    document.getElementById("speakOnly").onclick = async () => {
+      await api("/api/speak", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: document.getElementById("chat").value }),
+      });
+      document.getElementById("chatLog").textContent = "已唸出文字（未呼叫 LLM）。";
+      await refresh();
+    };
+
+    document.getElementById("addFact").onclick = async () => {
+      const text = document.getElementById("factText").value.trim();
+      if (!text) return;
+      const data = await api("/api/memory/fact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, author: "system" }),
+      });
+      document.getElementById("memHits").textContent = data.ok ? `已寫入 id=${data.id}，而家共 ${data.count} 條` : JSON.stringify(data);
+      document.getElementById("factText").value = "";
+      await refresh();
+    };
+
+    document.getElementById("searchMem").onclick = async () => {
+      const query = document.getElementById("memQuery").value.trim();
+      const data = await api("/api/memory/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, n: 6 }),
+      });
+      const hits = data.hits || [];
+      document.getElementById("memHits").textContent = hits.length
+        ? hits.map((h, i) => `${i+1}. [${h.kind}] (d=${h.distance})\n${h.text}`).join("\n\n")
+        : (data.error || "冇結果");
+    };
+
+    document.getElementById("runDemo").onclick = async () => {
+      document.getElementById("opsLog").textContent = "演示中…";
+      const data = await api("/api/demo", { method: "POST" });
+      document.getElementById("opsLog").textContent = data.ok
+        ? "完成：" + (data.steps || []).join(" → ")
+        : (data.error || JSON.stringify(data));
+      await refresh();
+    };
+
+    document.getElementById("toggleTrack").onclick = async () => {
+      const status = await api("/api/status");
+      const enabled = !(status.vts && status.vts.tracking_takeover);
+      const data = await api("/api/vts/tracking", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      document.getElementById("opsLog").textContent = data.ok
+        ? (enabled ? "已接管鏡頭" : "已交還鏡頭")
+        : (data.error || "失敗");
+      await refresh();
+    };
+
+    document.getElementById("reconnect").onclick = async () => {
+      document.getElementById("opsLog").textContent = "重連 VTS…";
+      const data = await api("/api/vts/connect", { method: "POST" });
+      document.getElementById("opsLog").textContent = data.ok ? "VTS 已連線" : (data.error || "失敗");
+      await refresh();
+    };
+
+    document.getElementById("saveVoice").onclick = async () => {
+      const data = await api("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          voice: document.getElementById("voice").value,
+          rate: document.getElementById("rate").value,
+          preview: true,
+        }),
+      });
+      document.getElementById("opsLog").textContent = data.ok ? "已套用聲線並試聽" : (data.detail || data.error || "失敗");
+      await refresh();
+    };
+
+    document.getElementById("saveMap").onclick = async () => {
+      const hotkeys = {};
+      document.querySelectorAll("select[data-emotion]").forEach((el) => {
+        hotkeys[el.getAttribute("data-emotion")] = el.value;
+      });
+      await api("/api/hotkeys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hotkeys }),
+      });
+      await refresh();
+    };
+
+    document.getElementById("fireHotkey").onclick = async () => {
+      const selected = [...document.querySelectorAll("select[data-emotion]")].find((el) => el.value);
+      if (!selected) return;
+      const data = await api("/api/hotkey", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: selected.value }),
+      });
+      document.getElementById("opsLog").textContent = data.ok ? "已觸發 " + selected.value : (data.error || "失敗");
+    };
+
+    refresh();
+    setInterval(refresh, 1500);
+  </script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+.venv
+__pycache__
+**/__pycache__
+data/chroma
+.git
+*.pyc
+_*.py
+docs
+.vts_token.txt
