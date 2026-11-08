@@ -2,27 +2,48 @@
 
 ## Local accounts (default)
 
-| 帳號 | 密碼 | 角色 |
-|------|------|------|
-| admin | yukari-admin | 全部控制台 + 訓練 chatroom |
-| trainer | yukari-train | 只見 `/train` 文字訓練房 |
+| Account | Password | Role |
+|---------|----------|------|
+| admin | yukari-admin | Full console + training chatroom |
+| trainer | yukari-train | `/train` only |
 
-上線前請改 `config.yaml` 內 `auth.users`（可改 password 明文後重跑一次 hash，或直接換 password_hash/salt）。
+Change `config.yaml` `auth.users` before going public. Session secret via `AILIVE2D_SECRET` in `.env`.
 
-## 訓練 Chatroom
+## Training chatroom
 
-- 網址：`/train`
-- API：`POST /api/train/chat`（無 TTS、無 VTS）
-- 歷史：`GET /api/train/history`
+- UI: `/train`
+- API: `POST /api/train/chat` (no TTS / no VTS)
+- History: `GET /api/train/history`
 
-## Docker
+## Docker + nginx-proxy (same as trpg)
+
+When the server already runs `jwilder/nginx-proxy` (+ acme-companion):
+
+1. DNS: `ai-trainning.innovationowl.com` A/AAAA -> Layerstack IP
+2. Confirm network: `docker network ls` (usually `nginx-proxy`)
+3. Deploy:
 
 ```bash
+git clone https://github.com/ariapurple/AIVtuber.git
+cd AIVtuber
 cp .env.example .env
-# 改 AILIVE2D_SECRET 同 Ollama URL
+# set AILIVE2D_SECRET, AILIVE2D_LLM_BASE_URL, LETSENCRYPT_EMAIL
 docker compose up -d --build
 ```
 
-開 `http://伺服器IP:8787/login`。
+Compose sets:
 
-注意：容器內通常冇 VTube Studio／本機音效；Docker 部署主要用嚟做文字訓練同遠端管理。VTS／TTS 繼續喺串流機本地跑即可。
+- `VIRTUAL_HOST` / `VIRTUAL_PORT=8787` for nginx-proxy routing
+- `LETSENCRYPT_HOST` for auto SSL
+- `expose: 8787` (no host port publish)
+- join external network `nginx-proxy`
+
+Open: `https://ai-trainning.innovationowl.com/login`
+
+Safe with other stacks: only `up` this compose; do not `down` nginx-proxy.
+
+### Local without proxy
+
+Temporarily add `ports: ["8787:8787"]` and drop the external `nginx-proxy` network.
+
+Note: containers usually cannot reach VTube Studio / local audio; Docker is for text training and remote admin. Keep VTS/TTS on the stream PC.

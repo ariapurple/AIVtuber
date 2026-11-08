@@ -1,22 +1,59 @@
+name: ailive2d
+
+# Reverse proxy + SSL handled by jwilder/nginx-proxy on the host.
+# This project does NOT run its own nginx.
+#
+# How it works (same pattern as E:\works\trpg):
+# - Service declares VIRTUAL_HOST + VIRTUAL_PORT
+# - jwilder/nginx-proxy auto-generates the upstream
+# - LETSENCRYPT_HOST triggers acme-companion SSL if present
+#
+# DNS (A/AAAA -> Layerstack server IP):
+#   ai-trainning.innovationowl.com
+#
+# Join the same Docker network as nginx-proxy (default name: nginx-proxy).
+# Override with NGINX_PROXY_NETWORK in .env if needed.
+
 services:
   ailive2d:
     build: .
     container_name: ailive2d
-    ports:
-      - "${AILIVE2D_PORT:-8787}:8787"
+    env_file:
+      - .env
     environment:
       AILIVE2D_HOST: "0.0.0.0"
       AILIVE2D_PORT: "8787"
-      # Session cookie signing secret (change in production)
       AILIVE2D_SECRET: "${AILIVE2D_SECRET:-please-change-this-secret}"
-      # Point at your Ollama host (LAN IP or host.docker.internal)
+      # Ollama on LAN (AI PC). From Layerstack VPS this must be reachable
+      # (VPN / public IP whitelist / tunnel). Override in .env.
       AILIVE2D_LLM_BASE_URL: "${AILIVE2D_LLM_BASE_URL:-http://192.168.50.226:11434}"
-      # Set to 0 to disable login (not recommended on public servers)
       AILIVE2D_AUTH: "${AILIVE2D_AUTH:-1}"
+      # --- jwilder/nginx-proxy ---
+      VIRTUAL_HOST: ${VIRTUAL_HOST:-ai-trainning.innovationowl.com}
+      VIRTUAL_PORT: "8787"
+      # --- nginx-proxy-companion / acme-companion ---
+      LETSENCRYPT_HOST: ${LETSENCRYPT_HOST:-ai-trainning.innovationowl.com}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-}
+      ENABLE_ACME: "true"
+    # Do not publish host ports when behind nginx-proxy (avoids clashing
+    # with other stacks). For local-only testing, temporarily add:
+    #   ports: ["8787:8787"]
+    expose:
+      - "8787"
     volumes:
       - ./config.yaml:/app/config.yaml:ro
-      - ./data:/app/data
+      - ailive2d-data:/app/data
     restart: unless-stopped
-    # If Ollama runs on the Docker host machine:
-    # extra_hosts:
-    #   - "host.docker.internal:host-gateway"
+    networks:
+      - nginx-proxy
+
+volumes:
+  ailive2d-data:
+    name: ailive2d-data
+
+networks:
+  # Shared external network where jwilder/nginx-proxy lives.
+  # Check on server: docker network ls
+  nginx-proxy:
+    external: true
+    name: ${NGINX_PROXY_NETWORK:-nginx-proxy}
