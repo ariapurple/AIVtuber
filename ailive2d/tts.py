@@ -33,6 +33,10 @@ VOICES: list[dict[str, str]] = [
 class TtsPlayer:
     def __init__(self, config: TtsConfig) -> None:
         self._config = config
+
+    def apply_config(self, config) -> None:
+        """Hot-swap voice/rate/device without restarting."""
+        self._config = config
         self._ready = False
         self._devices: list[str] | None = None
         self._cancel_play = False

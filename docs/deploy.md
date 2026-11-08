@@ -47,3 +47,14 @@ Safe with other stacks: only `up` this compose; do not `down` nginx-proxy.
 Temporarily add `ports: ["8787:8787"]` and drop the external `nginx-proxy` network.
 
 Note: containers usually cannot reach VTube Studio / local audio; Docker is for text training and remote admin. Keep VTS/TTS on the stream PC.
+
+## Config hot reload (no downtime)
+
+Live process watches `config.yaml` every ~2s. Editing persona / safety / TTS voice /
+LLM model applies on the next poll — no restart, in-flight chat may still use the
+old prompt until it finishes.
+
+Manual: `POST /api/config/reload` (admin).
+
+Still needs full restart: `auth.secret` (session cookies), Chroma `persist_dir`,
+VTS host/port, or any Python code change.

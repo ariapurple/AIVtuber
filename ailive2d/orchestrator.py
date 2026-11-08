@@ -4,7 +4,7 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Any, assert_never
 
-from ailive2d.config import AppConfig
+from ailive2d.config import AppConfig, load_config, CONFIG_PATH
 from ailive2d.llm import Emotion, LlmClient, LlmReply
 from ailive2d.memory import MemoryStore
 from ailive2d.tts import TtsPlayer
@@ -82,6 +82,45 @@ class Orchestrator:
         self.last = {**self.last, "cancel": payload}
         return payload
 
+
+
+    async def reload_config(self) -> dict[str, Any]:
+        """Reload config.yaml into the live process (no downtime).
+
+        Safe for live: persona / safety / character / llm model / tts voice.
+        Auth cookie secret + chroma persist_dir + VTS host/port still need restart
+        if those change.
+        """
+        new_cfg = load_config()
+        old = self.config
+        self.config = new_cfg
+        await self.llm.apply_config(new_cfg)
+        self.tts.apply_config(new_cfg.tts)
+        self.memory.apply_config(new_cfg)
+        self.vts.apply_config(new_cfg)
+        changed = {
+            "persona": old.character.persona != new_cfg.character.persona,
+            "safety": old.safety != new_cfg.safety,
+            "llm_model": old.llm.model != new_cfg.llm.model,
+            "llm_base_url": old.llm.base_url != new_cfg.llm.base_url,
+            "tts": (old.tts.voice, old.tts.rate) != (new_cfg.tts.voice, new_cfg.tts.rate),
+            "hotkeys": old.vts.hotkeys != new_cfg.vts.hotkeys,
+        }
+        needs_restart = []
+        if old.auth.secret != new_cfg.auth.secret:
+            needs_restart.append("auth.secret")
+        if old.memory.persist_dir != new_cfg.memory.persist_dir:
+            needs_restart.append("memory.persist_dir")
+        if (old.vts.host, old.vts.port) != (new_cfg.vts.host, new_cfg.vts.port):
+            needs_restart.append("vts.host/port")
+        return {
+            "ok": True,
+            "reloaded": True,
+            "path": str(CONFIG_PATH),
+            "changed": changed,
+            "needs_restart_for": needs_restart,
+            "character": new_cfg.character.name,
+        }
 
     def append_train_history(self, entry: dict[str, Any], limit: int = 200) -> None:
         self.train_history.append(entry)

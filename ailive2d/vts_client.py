@@ -34,6 +34,10 @@ IDLE_PARAMS: dict[str, float] = {
 class VtsController:
     def __init__(self, config: AppConfig) -> None:
         self._config = config
+
+    def apply_config(self, config) -> None:
+        """Hot-swap hotkey/expression maps; host/port change needs reconnect."""
+        self._config = config
         token_path = Path(config.vts.token_path)
         if not token_path.is_absolute():
             token_path = ROOT / token_path

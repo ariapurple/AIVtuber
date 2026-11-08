@@ -26,6 +26,17 @@ class LlmClient:
         self._config = config
         self._client = httpx.AsyncClient(timeout=config.llm.timeout_sec)
 
+    async def apply_config(self, config: AppConfig) -> None:
+        """Hot-swap LLM settings without dropping the process."""
+        old_llm = self._config.llm
+        self._config = config
+        if (
+            old_llm.base_url != config.llm.base_url
+            or old_llm.timeout_sec != config.llm.timeout_sec
+        ):
+            await self._client.aclose()
+            self._client = httpx.AsyncClient(timeout=config.llm.timeout_sec)
+
     async def close(self) -> None:
         await self._client.aclose()
 

@@ -32,6 +32,10 @@ class MemoryStore:
 
     def __init__(self, config: AppConfig) -> None:
         self._config = config
+
+    def apply_config(self, config) -> None:
+        """Hot-swap memory settings (collection path changes need restart)."""
+        self._config = config
         self._client_http = httpx.AsyncClient(timeout=config.llm.timeout_sec)
         path = Path(config.memory.persist_dir)
         if not path.is_absolute():

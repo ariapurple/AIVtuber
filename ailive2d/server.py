@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from starlette.middleware.sessions import SessionMiddleware
 
 from ailive2d.auth import AuthRegistry, load_users_from_config, require_admin, require_roles, require_user
-from ailive2d.config import ROOT, load_config, save_hotkeys, save_tts
+from ailive2d.config import CONFIG_PATH, ROOT, load_config, save_hotkeys, save_tts
 from ailive2d.orchestrator import Orchestrator
 
 WEB_DIR = ROOT / "web"
@@ -77,6 +77,43 @@ PUBLIC_PATHS = {
 }
 
 
+async def _config_file_watcher() -> None:
+    """Poll config.yaml mtime and hot-reload persona/safety without downtime."""
+    global auth_registry, AUTH_ENABLED
+    last_mtime: float | None = None
+    try:
+        last_mtime = CONFIG_PATH.stat().st_mtime
+    except OSError:
+        last_mtime = None
+    while True:
+        await asyncio.sleep(2.0)
+        orch = orchestrator
+        if orch is None:
+            continue
+        try:
+            mtime = CONFIG_PATH.stat().st_mtime
+        except OSError:
+            continue
+        if last_mtime is None:
+            last_mtime = mtime
+            continue
+        if mtime <= last_mtime:
+            continue
+        last_mtime = mtime
+        # Wait briefly so editors finish writing
+        await asyncio.sleep(0.4)
+        try:
+            result = await orch.reload_config()
+            # Refresh auth users (not cookie secret) from disk
+            cfg = orch.config
+            AUTH_ENABLED = bool(cfg.auth.enabled)
+            users = load_users_from_config({"users": cfg.auth.users})
+            auth_registry = AuthRegistry(users, enabled=AUTH_ENABLED)
+            print(f"[ailive2d] hot-reloaded config.yaml: {result.get('changed')}")
+        except Exception as exc:
+            print(f"[ailive2d] config hot-reload failed: {exc}")
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     global orchestrator, auth_registry, AUTH_ENABLED
@@ -87,7 +124,13 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     orchestrator = Orchestrator(config)
     # VTS connect is best-effort; training chat works without it.
     asyncio.create_task(orchestrator.connect_vts())
+    watcher = asyncio.create_task(_config_file_watcher())
     yield
+    watcher.cancel()
+    try:
+        await watcher
+    except asyncio.CancelledError:
+        pass
     await orchestrator.close()
 
 
@@ -158,6 +201,20 @@ app.add_middleware(
 @app.get("/api/health")
 async def health() -> dict[str, Any]:
     return {"ok": True, "auth_enabled": AUTH_ENABLED}
+
+
+@app.post("/api/config/reload")
+async def reload_config(request: Request) -> dict[str, Any]:
+    """Hot-reload config.yaml (persona/safety/etc) with no process downtime."""
+    global auth_registry, AUTH_ENABLED
+    if AUTH_ENABLED:
+        require_admin(request)
+    result = await _orch().reload_config()
+    cfg = _orch().config
+    AUTH_ENABLED = bool(cfg.auth.enabled)
+    users = load_users_from_config({"users": cfg.auth.users})
+    auth_registry = AuthRegistry(users, enabled=AUTH_ENABLED)
+    return result
 
 
 @app.get("/login")
