@@ -31,7 +31,7 @@ class MemoryStore:
     """
 
     def __init__(self, config: AppConfig) -> None:
-        self._config = config
+        self.apply_config(config)
 
     def apply_config(self, config) -> None:
         """Hot-swap memory settings (collection path changes need restart)."""
