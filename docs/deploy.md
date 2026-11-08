@@ -1,5 +1,7 @@
 # Deploy & accounts
 
+> 完整 end-to-end 說明（含 Mermaid 流程圖）：見 repo 根目錄 **[README.md](../README.md)**。
+
 ## Local accounts (default)
 
 | Account | Password | Role |
@@ -51,7 +53,7 @@ Note: containers usually cannot reach VTube Studio / local audio; Docker is for 
 ## Config hot reload (no downtime)
 
 Live process watches `config.yaml` every ~2s. Editing persona / safety / TTS voice /
-LLM model applies on the next poll — no restart, in-flight chat may still use the
+LLM model applies on the next poll — no restart; in-flight chat may still use the
 old prompt until it finishes.
 
 Manual: `POST /api/config/reload` (admin).
