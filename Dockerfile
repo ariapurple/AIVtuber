@@ -2,9 +2,9 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Minimal OS deps for pygame / chromadb wheels
+# Minimal OS deps for pygame / chromadb / opencv (via pyvts) wheels
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libsdl2-2.0-0 libglib2.0-0 curl \
+    libsdl2-2.0-0 libglib2.0-0 libgl1 libgomp1 curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
