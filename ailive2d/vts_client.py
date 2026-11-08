@@ -33,7 +33,7 @@ IDLE_PARAMS: dict[str, float] = {
 
 class VtsController:
     def __init__(self, config: AppConfig) -> None:
-        self._config = config
+        self.apply_config(config)
 
     def apply_config(self, config) -> None:
         """Hot-swap hotkey/expression maps; host/port change needs reconnect."""
