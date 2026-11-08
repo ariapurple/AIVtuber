@@ -11,7 +11,7 @@ name: ailive2d
 # DNS (A/AAAA -> Layerstack server IP):
 #   ai-trainning.innovationowl.com
 #
-# Join the same Docker network as nginx-proxy (default name: nginx-proxy).
+# Join the same Docker network as nginx-proxy (default name: web_proxy).
 # Override with NGINX_PROXY_NETWORK in .env if needed.
 
 services:
@@ -56,4 +56,4 @@ networks:
   # Check on server: docker network ls
   nginx-proxy:
     external: true
-    name: ${NGINX_PROXY_NETWORK:-nginx-proxy}
+    name: ${NGINX_PROXY_NETWORK:-web_proxy}
